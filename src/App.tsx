@@ -147,25 +147,25 @@ export default function App() {
     <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden bg-surface text-text">
       {/* Header */}
       <header className="fixed top-0 w-full max-w-md z-50 bg-surface/90 backdrop-blur-xl border-b border-text/5 pt-[env(safe-area-inset-top)]">
-        <div className="flex items-center justify-between px-4 h-12">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-on-primary" />
+        <div className="flex items-center justify-between px-4 h-14">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+              <ShoppingCart className="w-6 h-6 text-on-primary" />
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-text font-headline font-black tracking-tight text-[14px] leading-none">
+              <span className="text-text font-headline font-black tracking-tight text-[20px] leading-none">
                 Liste
               </span>
-              <span className="text-primary font-headline font-black tracking-tight text-[14px] leading-none">
+              <span className="text-primary font-headline font-black tracking-tight text-[20px] leading-none">
                 Courses
               </span>
             </div>
           </div>
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="p-1.5 rounded-lg text-text-muted hover:text-primary transition-all active:scale-90"
+            className="p-2 rounded-lg text-text-muted hover:text-primary transition-all active:scale-90"
           >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
         </div>
 
@@ -364,13 +364,13 @@ function ItemRow({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className={`font-body font-medium text-sm leading-tight transition-all ${
+        <p className={`font-body font-medium text-base leading-tight transition-all ${
           item.checked ? 'line-through text-text-dim' : 'text-text'
         }`}>
           {item.name}
         </p>
         {item.qty && (
-          <p className="text-[10px] text-text-dim mt-0.5">{item.qty}</p>
+          <p className="text-xs text-text-dim mt-0.5">{item.qty}</p>
         )}
       </div>
 
