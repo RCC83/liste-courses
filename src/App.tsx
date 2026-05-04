@@ -147,16 +147,14 @@ export default function App() {
     <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden bg-surface text-text">
       {/* Header */}
       <header className="fixed top-0 w-full max-w-md z-50 bg-surface/90 backdrop-blur-xl border-b border-text/5 pt-[env(safe-area-inset-top)]">
-        <div className="flex items-center justify-between px-4 h-14">
+        <div className="flex items-center justify-between px-4 h-20">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-              <ShoppingCart className="w-6 h-6 text-on-primary" />
-            </div>
+            <img src="/logo.svg" alt="Logo" className="w-14 h-14 rounded-2xl" />
             <div className="flex items-baseline gap-1">
-              <span className="text-text font-headline font-black tracking-tight text-[20px] leading-none">
+              <span className="text-text font-headline font-black tracking-tight text-[26px] leading-none">
                 Liste
               </span>
-              <span className="text-primary font-headline font-black tracking-tight text-[20px] leading-none">
+              <span className="text-primary font-headline font-black tracking-tight text-[26px] leading-none">
                 Courses
               </span>
             </div>
@@ -203,7 +201,7 @@ export default function App() {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`flex-1 py-1.5 rounded-lg font-headline font-bold text-[9px] uppercase tracking-widest transition-all ${
+              className={`flex-1 py-2 rounded-lg font-headline font-bold text-xs uppercase tracking-widest transition-all ${
                 filter === f
                   ? 'bg-primary text-on-primary'
                   : 'bg-surface-high text-text-muted border border-text/5'
@@ -270,7 +268,7 @@ export default function App() {
             >
               <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
                 <span className="text-sm">{CATEGORY_EMOJI[cat]}</span>
-                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-text-dim">
+                <span className="text-xs font-black uppercase tracking-[0.18em] text-text-dim">
                   {cat}
                 </span>
                 <div className="flex-1 h-px bg-text/5" />
@@ -364,13 +362,13 @@ function ItemRow({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className={`font-body font-medium text-base leading-tight transition-all ${
+        <p className={`font-body font-semibold text-lg leading-tight transition-all ${
           item.checked ? 'line-through text-text-dim' : 'text-text'
         }`}>
           {item.name}
         </p>
         {item.qty && (
-          <p className="text-xs text-text-dim mt-0.5">{item.qty}</p>
+          <p className="text-sm text-text-dim mt-0.5">{item.qty}</p>
         )}
       </div>
 
