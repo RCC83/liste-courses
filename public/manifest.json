@@ -1,12 +1,18 @@
 {
   "name": "Liste Courses",
   "short_name": "ListeCourses",
-  "description": "Liste de courses simple et rapide.",
+  "description": "Application de liste de courses simple, rapide et intuitive. Organisez vos achats par catégorie.",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#111111",
   "theme_color": "#16a34a",
   "orientation": "portrait",
+  "lang": "fr",
+  "dir": "ltr",
+  "scope": "/",
+  "categories": ["shopping", "food", "lifestyle", "utilities"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -26,5 +32,24 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Liste de courses"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ajouter un article",
+      "short_name": "Ajouter",
+      "description": "Ajouter rapidement un article à la liste",
+      "url": "/",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
 }
