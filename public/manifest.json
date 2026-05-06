@@ -4,15 +4,21 @@
   "description": "Application de liste de courses simple, rapide et intuitive. Organisez vos achats par catégorie.",
   "start_url": "/",
   "id": "/",
+  "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#111111",
   "theme_color": "#16a34a",
   "orientation": "portrait",
   "lang": "fr",
   "dir": "ltr",
-  "scope": "/",
   "categories": ["shopping", "food", "lifestyle", "utilities"],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "icons": [
     {
       "src": "/icon-192.png",
@@ -40,16 +46,30 @@
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Liste de courses"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Liste de courses - vue large"
     }
   ],
   "shortcuts": [
     {
       "name": "Ajouter un article",
       "short_name": "Ajouter",
-      "description": "Ajouter rapidement un article à la liste",
+      "description": "Ajouter rapidement un article",
       "url": "/",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ],
-  "prefer_related_applications": false
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text"
+    }
+  }
 }
