@@ -3,94 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Camera,
+  ChevronDown,
   Plus,
-  Check,
-  Trash2,
-  ShoppingCart,
   Sun,
   Moon,
-  X,
-  ChevronDown,
-  RotateCcw,
   ShoppingBag,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { CATEGORIES, CATEGORY_EMOJI } from './constants';
+import { load, loadListsAndItems, save } from './storage';
+import type { ExtractedItem, Filter, Item, ShoppingList } from './types';
+import { ItemRow } from './components/ItemRow';
+import { ItemSheet, type ItemDraft } from './components/ItemSheet';
+import { ListsSheet } from './components/ListsSheet';
+import { PhotoImportSheet } from './components/PhotoImportSheet';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type Category =
-  | 'Fruits & Légumes'
-  | 'Viandes & Poissons'
-  | 'Produits laitiers'
-  | 'Boulangerie'
-  | 'Boissons'
-  | 'Épicerie'
-  | 'Surgelés'
-  | 'Hygiène'
-  | 'Autre';
-
-type Filter = 'tous' | 'a-acheter' | 'achetes';
-
-interface Item {
-  id: string;
-  name: string;
-  qty: string;
-  category: Category;
-  checked: boolean;
-  createdAt: number;
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const CATEGORIES: Category[] = [
-  'Fruits & Légumes',
-  'Viandes & Poissons',
-  'Produits laitiers',
-  'Boulangerie',
-  'Boissons',
-  'Épicerie',
-  'Surgelés',
-  'Hygiène',
-  'Autre',
-];
-
-const CATEGORY_EMOJI: Record<Category, string> = {
-  'Fruits & Légumes': '🥦',
-  'Viandes & Poissons': '🥩',
-  'Produits laitiers': '🧀',
-  'Boulangerie': '🥖',
-  'Boissons': '🥤',
-  'Épicerie': '🛒',
-  'Surgelés': '🧊',
-  'Hygiène': '🧴',
-  'Autre': '📦',
-};
-
-// ─── Storage helpers ──────────────────────────────────────────────────────────
-
-const load = <T,>(key: string, fallback: T): T => {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? (JSON.parse(v) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const save = (key: string, value: unknown) =>
-  localStorage.setItem(key, JSON.stringify(value));
-
-// ─── Main App ─────────────────────────────────────────────────────────────────
+const initial = loadListsAndItems();
 
 export default function App() {
-  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
-    load('sl_theme', 'dark')
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => load('sl_theme', 'dark'));
+  const [lists, setLists] = useState<ShoppingList[]>(initial.lists);
+  const [items, setItems] = useState<Item[]>(initial.items);
+  const [activeListId, setActiveListId] = useState<string>(() =>
+    load('sl_active_list', initial.lists[0]?.id ?? 'default')
   );
-  const [items, setItems] = useState<Item[]>(() => load('sl_items', []));
   const [filter, setFilter] = useState<Filter>('tous');
   const [showAdd, setShowAdd] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);
+  const [showLists, setShowLists] = useState(false);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
 
   // Sync theme class
   useEffect(() => {
@@ -98,16 +43,25 @@ export default function App() {
     document.documentElement.classList.toggle('light', theme === 'light');
   }, [theme]);
 
-  // Persist items
-  useEffect(() => {
-    save('sl_items', items);
-  }, [items]);
+  useEffect(() => save('sl_lists', lists), [lists]);
+  useEffect(() => save('sl_items', items), [items]);
+  useEffect(() => save('sl_active_list', activeListId), [activeListId]);
 
-  const addItem = (item: Omit<Item, 'id' | 'checked' | 'createdAt'>) => {
+  // Guard against a stale/deleted active list id.
+  useEffect(() => {
+    if (!lists.some((l) => l.id === activeListId) && lists.length > 0) {
+      setActiveListId(lists[0].id);
+    }
+  }, [lists, activeListId]);
+
+  const activeList = lists.find((l) => l.id === activeListId) ?? lists[0];
+
+  const addItem = (draft: ItemDraft) => {
     setItems((prev) => [
       {
-        ...item,
+        ...draft,
         id: crypto.randomUUID(),
+        listId: activeListId,
         checked: false,
         createdAt: Date.now(),
       },
@@ -116,32 +70,78 @@ export default function App() {
     setShowAdd(false);
   };
 
+  const addItemsFromPhoto = (extracted: ExtractedItem[]) => {
+    const now = Date.now();
+    setItems((prev) => [
+      ...extracted.map((it, i) => ({
+        ...it,
+        id: crypto.randomUUID(),
+        listId: activeListId,
+        checked: false,
+        createdAt: now + i,
+      })),
+      ...prev,
+    ]);
+    setShowPhoto(false);
+  };
+
+  const updateItem = (id: string, draft: ItemDraft) => {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...draft } : i)));
+    setEditingItem(null);
+  };
+
   const toggleItem = (id: string) =>
     setItems((prev) =>
       prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
     );
 
-  const deleteItem = (id: string) =>
+  const deleteItem = (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
+    setEditingItem((cur) => (cur?.id === id ? null : cur));
+  };
 
   const clearChecked = () =>
-    setItems((prev) => prev.filter((i) => !i.checked));
+    setItems((prev) => prev.filter((i) => !(i.checked && i.listId === activeListId)));
 
-  // Filtered items
-  const filtered = items.filter((i) => {
+  // Lists management
+  const createList = (name: string) => {
+    const list: ShoppingList = { id: crypto.randomUUID(), name, createdAt: Date.now() };
+    setLists((prev) => [...prev, list]);
+    setActiveListId(list.id);
+  };
+
+  const renameList = (id: string, name: string) =>
+    setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name } : l)));
+
+  const deleteList = (id: string) => {
+    setLists((prev) => {
+      const next = prev.filter((l) => l.id !== id);
+      return next.length > 0 ? next : prev; // always keep at least one list
+    });
+    setItems((prev) => prev.filter((i) => i.listId !== id));
+  };
+
+  // Items scoped to the active list
+  const listItems = items.filter((i) => i.listId === activeListId);
+
+  const filtered = listItems.filter((i) => {
     if (filter === 'a-acheter') return !i.checked;
     if (filter === 'achetes') return i.checked;
     return true;
   });
 
-  // Group by category
   const grouped = CATEGORIES.map((cat) => ({
     cat,
     items: filtered.filter((i) => i.category === cat),
   })).filter((g) => g.items.length > 0);
 
-  const checkedCount = items.filter((i) => i.checked).length;
-  const totalCount = items.length;
+  const checkedCount = listItems.filter((i) => i.checked).length;
+  const totalCount = listItems.length;
+
+  const itemCounts = lists.reduce<Record<string, number>>((acc, l) => {
+    acc[l.id] = items.filter((i) => i.listId === l.id).length;
+    return acc;
+  }, {});
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden bg-surface text-text">
@@ -164,6 +164,19 @@ export default function App() {
             className="p-2 rounded-lg text-text-muted hover:text-primary transition-all active:scale-90"
           >
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
+
+        {/* List switcher */}
+        <div className="px-4 pb-2">
+          <button
+            onClick={() => setShowLists(true)}
+            className="flex items-center gap-1.5 text-text-muted hover:text-primary transition-colors"
+          >
+            <span className="font-headline font-bold text-sm truncate max-w-[220px]">
+              {activeList?.name ?? 'Ma liste'}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -193,7 +206,7 @@ export default function App() {
       {/* Main */}
       <main
         className="flex-1 px-3 pb-28 overflow-y-auto"
-        style={{ paddingTop: totalCount > 0 ? '7rem' : '4.5rem' }}
+        style={{ paddingTop: totalCount > 0 ? '9.5rem' : '7rem' }}
       >
         {/* Filter tabs */}
         <div className="flex gap-1.5 py-2.5 sticky top-0 bg-surface z-10">
@@ -285,6 +298,7 @@ export default function App() {
                       item={item}
                       onToggle={() => toggleItem(item.id)}
                       onDelete={() => deleteItem(item.id)}
+                      onEdit={() => setEditingItem(item)}
                     />
                   ))}
                 </AnimatePresence>
@@ -294,311 +308,67 @@ export default function App() {
         </div>
       </main>
 
-      {/* FAB */}
-      <div className="fixed bottom-6 right-1/2 translate-x-1/2 z-40 max-w-md w-full flex justify-end pr-3 pb-[env(safe-area-inset-bottom)]">
+      {/* FABs */}
+      <div className="fixed bottom-6 right-1/2 translate-x-1/2 z-40 max-w-md w-full flex flex-col items-end gap-2.5 pr-3 pb-[env(safe-area-inset-bottom)]">
+        <motion.button
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setShowPhoto(true)}
+          className="w-10 h-10 rounded-xl bg-surface-container border border-text/10 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.2)] text-text hover:border-primary/40 transition-all"
+          aria-label="Ajouter par photo"
+        >
+          <Camera className="w-[18px] h-[18px]" />
+        </motion.button>
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={() => setShowAdd(true)}
           className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:brightness-110 transition-all"
+          aria-label="Ajouter un article"
         >
           <Plus className="w-6 h-6 text-on-primary" strokeWidth={2.5} />
         </motion.button>
       </div>
 
-      {/* Add Item Sheet */}
+      {/* Add item sheet */}
       <AnimatePresence>
         {showAdd && (
-          <AddItemSheet
-            onAdd={addItem}
-            onClose={() => setShowAdd(false)}
+          <ItemSheet onSubmit={addItem} onClose={() => setShowAdd(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* Edit item sheet */}
+      <AnimatePresence>
+        {editingItem && (
+          <ItemSheet
+            item={editingItem}
+            onSubmit={(draft) => updateItem(editingItem.id, draft)}
+            onDelete={() => deleteItem(editingItem.id)}
+            onClose={() => setEditingItem(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Photo import sheet */}
+      <AnimatePresence>
+        {showPhoto && (
+          <PhotoImportSheet onImport={addItemsFromPhoto} onClose={() => setShowPhoto(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* Lists sheet */}
+      <AnimatePresence>
+        {showLists && (
+          <ListsSheet
+            lists={lists}
+            activeListId={activeListId}
+            itemCounts={itemCounts}
+            onSelect={(id) => { setActiveListId(id); setShowLists(false); }}
+            onCreate={createList}
+            onRename={renameList}
+            onDelete={deleteList}
+            onClose={() => setShowLists(false)}
           />
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-// ─── Item Row ─────────────────────────────────────────────────────────────────
-
-function ItemRow({
-  item,
-  onToggle,
-  onDelete,
-}: {
-  item: Item;
-  onToggle: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 10, height: 0, marginBottom: 0 }}
-      transition={{ duration: 0.2 }}
-      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-colors ${
-        item.checked
-          ? 'bg-surface-container border-text/5 opacity-50'
-          : 'bg-surface-high border-text/5'
-      }`}
-    >
-      {/* Checkbox */}
-      <button
-        onClick={onToggle}
-        className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
-          item.checked
-            ? 'bg-primary border-primary'
-            : 'border-text/25 hover:border-primary/60'
-        }`}
-      >
-        <AnimatePresence>
-          {item.checked && (
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-              <Check className="w-3 h-3 text-on-primary" strokeWidth={3} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </button>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <p className={`font-body font-semibold text-lg leading-tight transition-all ${
-          item.checked ? 'line-through text-text-dim' : 'text-text'
-        }`}>
-          {item.name}
-        </p>
-        {item.qty && (
-          <p className="text-sm text-text-dim mt-0.5">{item.qty}</p>
-        )}
-      </div>
-
-      {/* Delete */}
-      <button
-        onClick={onDelete}
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-text-dim hover:text-error hover:bg-error/10 transition-all active:scale-90"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
-    </motion.div>
-  );
-}
-
-// ─── Qty suggestions ─────────────────────────────────────────────────────────
-
-const QTY_SUGGESTIONS = [
-  '×1', '×2', '×3', '×4', '×6',
-  '100g', '150g', '200g', '250g', '300g', '400g', '500g', '750g', '1 kg', '1.5 kg', '2 kg',
-  '50 ml', '100 ml', '150 ml', '200 ml', '250 ml', '330 ml', '500 ml', '750 ml', '1 L', '1.5 L', '2 L',
-  '1 paquet', '2 paquets', '3 paquets',
-  '1 bouteille', '2 bouteilles',
-  '1 boîte', '2 boîtes',
-  '1 sachet', '2 sachets',
-  '1 barquette', '2 barquettes',
-  '1 douzaine',
-  '1 tranche', '2 tranches',
-  '1 pot', '2 pots',
-  '1 rouleau',
-];
-
-function QtyInput({ qty, setQty }: { qty: string; setQty: (v: string) => void }) {
-  const [focused, setFocused] = useState(false);
-
-  const suggestions = qty.trim()
-    ? QTY_SUGGESTIONS.filter((s) =>
-        s.toLowerCase().includes(qty.toLowerCase()) && s.toLowerCase() !== qty.toLowerCase()
-      ).slice(0, 8)
-    : QTY_SUGGESTIONS.slice(0, 8);
-
-  const showDropdown = focused && suggestions.length > 0;
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-[9px] font-bold uppercase tracking-widest text-text-dim ml-0.5">
-        Quantité (optionnel)
-      </label>
-      <div className="relative">
-        <input
-          type="text"
-          value={qty}
-          onChange={(e) => setQty(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 120)}
-          placeholder="500g, 1 L, 2 bouteilles…"
-          className="w-full bg-surface-high border border-text/5 rounded-xl py-2.5 px-3 text-text font-body font-medium text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-text-dim"
-        />
-        <AnimatePresence>
-          {showDropdown && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.12 }}
-              className="absolute left-0 right-0 top-full mt-1 z-10 bg-surface-container border border-text/10 rounded-xl shadow-xl overflow-hidden"
-            >
-              {suggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onMouseDown={() => setQty(s)}
-                  className="w-full text-left px-3 py-2 font-body font-medium text-sm text-text-muted hover:text-text hover:bg-surface-high transition-colors border-b border-text/5 last:border-0"
-                >
-                  {s}
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
-
-// ─── Add Item Sheet ───────────────────────────────────────────────────────────
-
-function AddItemSheet({
-  onAdd,
-  onClose,
-}: {
-  onAdd: (item: Omit<Item, 'id' | 'checked' | 'createdAt'>) => void;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState('');
-  const [qty, setQty] = useState('');
-  const [category, setCategory] = useState<Category>('Épicerie');
-  const [showCatPicker, setShowCatPicker] = useState(false);
-  const nameRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setTimeout(() => nameRef.current?.focus(), 150);
-  }, []);
-
-  const handleSubmit = () => {
-    if (!name.trim()) return;
-    onAdd({ name: name.trim(), qty: qty.trim(), category });
-  };
-
-  return (
-    <>
-      {/* Backdrop */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Sheet */}
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 bg-surface-container rounded-t-2xl border-t border-text/10 shadow-2xl pb-[env(safe-area-inset-bottom)]"
-      >
-        {/* Handle */}
-        <div className="flex justify-center pt-2.5 pb-1">
-          <div className="w-8 h-0.5 rounded-full bg-text/20" />
-        </div>
-
-        <div className="px-4 pt-2 pb-5 flex flex-col gap-3.5">
-          {/* Title */}
-          <div className="flex items-center justify-between">
-            <h2 className="font-headline font-bold text-primary text-xs tracking-wide">
-              Ajouter un article
-            </h2>
-            <button onClick={onClose} className="p-1 rounded-md text-text-muted hover:text-text transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Name */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-bold uppercase tracking-widest text-text-dim ml-0.5">
-              Article *
-            </label>
-            <input
-              ref={nameRef}
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder="Tomates, Lait, Pain…"
-              className="w-full bg-surface-high border border-text/5 rounded-xl py-2.5 px-3 text-text font-body font-medium text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-text-dim"
-            />
-          </div>
-
-          {/* Qty */}
-          <QtyInput qty={qty} setQty={setQty} />
-
-          {/* Category picker */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[9px] font-bold uppercase tracking-widest text-text-dim ml-0.5">
-              Catégorie
-            </label>
-            <button
-              onClick={() => setShowCatPicker(!showCatPicker)}
-              className="w-full bg-surface-high border border-text/5 rounded-xl py-2.5 px-3 flex items-center justify-between text-text font-body font-medium text-sm focus:outline-none transition-all hover:border-primary/30"
-            >
-              <span className="flex items-center gap-2">
-                <span>{CATEGORY_EMOJI[category]}</span>
-                <span>{category}</span>
-              </span>
-              <motion.div animate={{ rotate: showCatPicker ? 180 : 0 }}>
-                <ChevronDown className="w-3.5 h-3.5 text-text-muted" />
-              </motion.div>
-            </button>
-
-            <AnimatePresence>
-              {showCatPicker && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="grid grid-cols-3 gap-1.5 pt-1">
-                    {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => { setCategory(cat); setShowCatPicker(false); }}
-                        className={`flex flex-col items-center gap-0.5 p-2 rounded-lg border transition-all ${
-                          category === cat
-                            ? 'bg-primary/10 border-primary text-primary'
-                            : 'bg-surface-bright border-text/5 text-text-muted hover:text-text'
-                        }`}
-                      >
-                        <span className="text-lg">{CATEGORY_EMOJI[cat]}</span>
-                        <span className="text-[7px] font-bold uppercase tracking-wide leading-tight text-center">
-                          {cat}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={onClose}
-              className="flex-1 h-10 rounded-xl bg-surface-bright border border-text/5 text-text-muted font-body font-medium text-sm hover:text-text transition-all active:scale-95"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={!name.trim()}
-              className="flex-grow h-10 rounded-xl bg-primary text-on-primary font-headline font-bold text-sm hover:brightness-110 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 px-5"
-            >
-              <Plus className="w-4 h-4" strokeWidth={2.5} />
-              <span>Ajouter</span>
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </>
   );
 }
