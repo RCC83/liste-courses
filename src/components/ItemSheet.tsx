@@ -99,7 +99,7 @@ export function ItemSheet({
           </div>
 
           {/* Qty */}
-          <QtyInput qty={qty} setQty={setQty} />
+          <QtyInput qty={qty} setQty={setQty} onEnter={handleSubmit} />
 
           {/* Category picker */}
           <div className="flex flex-col gap-1.5">

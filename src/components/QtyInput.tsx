@@ -7,7 +7,15 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { QTY_SUGGESTIONS } from '../constants';
 
-export function QtyInput({ qty, setQty }: { qty: string; setQty: (v: string) => void }) {
+export function QtyInput({
+  qty,
+  setQty,
+  onEnter,
+}: {
+  qty: string;
+  setQty: (v: string) => void;
+  onEnter?: () => void;
+}) {
   const [focused, setFocused] = useState(false);
 
   const suggestions = qty.trim()
@@ -30,6 +38,12 @@ export function QtyInput({ qty, setQty }: { qty: string; setQty: (v: string) => 
           onChange={(e) => setQty(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 120)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              setFocused(false);
+              onEnter?.();
+            }
+          }}
           placeholder="500g, 1 L, 2 bouteilles…"
           className="w-full bg-surface-high border border-text/5 rounded-xl py-2.5 px-3 text-text font-body font-medium text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-text-dim"
         />
@@ -40,7 +54,7 @@ export function QtyInput({ qty, setQty }: { qty: string; setQty: (v: string) => 
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.12 }}
-              className="absolute left-0 right-0 top-full mt-1 z-10 bg-surface-container border border-text/10 rounded-xl shadow-xl overflow-hidden"
+              className="absolute left-0 right-0 top-full mt-1 z-10 bg-surface-container border border-text/10 rounded-xl shadow-xl overflow-y-auto max-h-44"
             >
               {suggestions.map((s) => (
                 <button
