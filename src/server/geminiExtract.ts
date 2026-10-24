@@ -10,7 +10,7 @@
  */
 
 import { GoogleGenAI, Type } from '@google/genai';
-import { CATEGORIES } from '../constants';
+import { CATEGORIES, QTY_MAX_LENGTH } from '../constants';
 
 export interface ExtractedItemPayload {
   name: string;
@@ -75,7 +75,7 @@ export async function extractItemsFromImage(
       .filter((it) => it && typeof it.name === 'string' && it.name.trim())
       .map((it) => ({
         name: String(it.name).trim(),
-        qty: typeof it.qty === 'string' ? it.qty.trim() : '',
+        qty: typeof it.qty === 'string' ? it.qty.trim().slice(0, QTY_MAX_LENGTH) : '',
         category: CATEGORIES.includes(it.category) ? it.category : 'Autre',
       }));
   } catch {
