@@ -6,7 +6,7 @@
 import { useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Camera, Check, ImageUp, Loader2, RotateCcw, X } from 'lucide-react';
-import { CATEGORIES, CATEGORY_EMOJI } from '../constants';
+import { CATEGORIES, CATEGORY_EMOJI, QTY_MAX_LENGTH, QTY_SUGGESTIONS } from '../constants';
 import type { Category, ExtractedItem } from '../types';
 import { extractItemsFromPhoto } from '../lib/extractItemsFromPhoto';
 
@@ -53,10 +53,16 @@ export function PhotoImportSheet({
   const updateRow = (i: number, patch: Partial<ReviewRow>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
-  const selectedCount = rows.filter((r) => r.selected).length;
+  // A row can only be imported if it is ticked and still has a name
+  // (same rule as the manual "Ajouter un article" sheet).
+  const isImportable = (r: ReviewRow) => r.selected && r.name.trim() !== '';
+  const selectedCount = rows.filter(isImportable).length;
 
   const confirmImport = () => {
-    const selected = rows.filter((r) => r.selected).map(({ name, qty, category }) => ({ name, qty, category }));
+    const selected = rows
+      .filter(isImportable)
+      .map(({ name, qty, category }) => ({ name: name.trim(), qty: qty.trim(), category }));
+    if (selected.length === 0) return;
     onImport(selected);
   };
 
@@ -165,6 +171,9 @@ export function PhotoImportSheet({
                 >
                   <button
                     onClick={() => toggleRow(i)}
+                    role="checkbox"
+                    aria-checked={row.selected}
+                    aria-label="Importer cet article"
                     className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
                       row.selected ? 'bg-primary border-primary' : 'border-text/25'
                     }`}
@@ -175,18 +184,26 @@ export function PhotoImportSheet({
                   <input
                     value={row.name}
                     onChange={(e) => updateRow(i, { name: e.target.value })}
+                    aria-label="Nom de l'article"
+                    aria-invalid={row.selected && row.name.trim() === ''}
                     className="flex-1 min-w-0 bg-transparent text-text font-body font-semibold text-sm focus:outline-none"
                   />
 
                   <input
                     value={row.qty}
                     onChange={(e) => updateRow(i, { qty: e.target.value })}
+                    list="photo-qty-suggestions"
+                    maxLength={QTY_MAX_LENGTH}
+                    autoComplete="off"
+                    aria-label="Quantité"
+                    title={row.qty}
                     placeholder="qté"
-                    className="w-16 flex-shrink-0 bg-surface-bright rounded-lg px-1.5 py-1 text-text-dim text-xs text-center focus:outline-none"
+                    className="w-24 flex-shrink-0 bg-surface-bright rounded-lg px-1.5 py-1 text-text-dim text-xs text-center focus:outline-none"
                   />
 
                   <select
                     value={row.category}
+                    aria-label="Catégorie"
                     onChange={(e) => updateRow(i, { category: e.target.value as Category })}
                     className="flex-shrink-0 bg-surface-bright rounded-lg px-1 py-1 text-xs focus:outline-none"
                   >
@@ -199,6 +216,12 @@ export function PhotoImportSheet({
                 </div>
               ))}
             </div>
+
+            <datalist id="photo-qty-suggestions">
+              {QTY_SUGGESTIONS.map((q) => (
+                <option key={q} value={q} />
+              ))}
+            </datalist>
 
             <div className="px-4 pt-1 pb-4 flex gap-2 flex-shrink-0 border-t border-text/5">
               <button

@@ -51,13 +51,13 @@ export function ItemRow({
 
       {/* Content — tap to edit */}
       <button onClick={onEdit} className="flex-1 min-w-0 text-left">
-        <p className={`font-body font-semibold text-lg leading-tight transition-all ${
+        <p className={`font-body font-semibold text-lg leading-tight break-words transition-all ${
           item.checked ? 'line-through text-text-dim' : 'text-text'
         }`}>
           {item.name}
         </p>
         {item.qty && (
-          <p className="text-sm text-text-dim mt-0.5">{item.qty}</p>
+          <p className="text-sm text-text-dim mt-0.5 break-words">{item.qty}</p>
         )}
       </button>
 
