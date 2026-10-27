@@ -37,6 +37,7 @@ export function ItemSheet({
   const [category, setCategory] = useState<Category>(item?.category ?? 'Épicerie');
   const [showCatPicker, setShowCatPicker] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+  const qtyRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTimeout(() => nameRef.current?.focus(), 150);
@@ -92,14 +93,20 @@ export function ItemSheet({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                // Enter moves on to the quantity field instead of saving right away,
+                // so the category can still be changed before tapping "Ajouter".
+                if (name.trim()) qtyRef.current?.focus();
+              }}
               placeholder="Tomates, Lait, Pain…"
               className="w-full bg-surface-high border border-text/5 rounded-xl py-2.5 px-3 text-text font-body font-medium text-sm focus:outline-none focus:border-primary/50 transition-all placeholder:text-text-dim"
             />
           </div>
 
           {/* Qty */}
-          <QtyInput qty={qty} setQty={setQty} onEnter={handleSubmit} />
+          <QtyInput qty={qty} setQty={setQty} onEnter={handleSubmit} inputRef={qtyRef} />
 
           {/* Category picker */}
           <div className="flex flex-col gap-1.5">
