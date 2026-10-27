@@ -14,10 +14,12 @@ export function QtyInput({
   qty,
   setQty,
   onEnter,
+  inputRef,
 }: {
   qty: string;
   setQty: (v: string) => void;
   onEnter?: () => void;
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   const id = useId();
   const listId = `${id}-list`;
@@ -99,6 +101,7 @@ export function QtyInput({
       </label>
       <div className="relative">
         <input
+          ref={inputRef}
           id={id}
           type="text"
           role="combobox"
