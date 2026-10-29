@@ -32,6 +32,7 @@ import type { Filter, Item, ShoppingList } from './types';
 import { ItemRow } from './components/ItemRow';
 import { ItemSheet, type ItemDraft } from './components/ItemSheet';
 import { ListsSheet } from './components/ListsSheet';
+import { LoginScreen } from './components/LoginScreen';
 
 const initial = loadListsAndItems();
 
@@ -80,7 +81,7 @@ export default function App() {
     setItems(s.items);
     setDeleted(s.deleted);
   }, []);
-  const syncStatus = useSync({ lists, items, deleted }, applySync);
+  const { status: syncStatus, authRequired, syncNow } = useSync({ lists, items, deleted }, applySync);
 
   /** Every change gets a strictly newer timestamp, so the latest edit wins everywhere. */
   const stamp = <T extends { updatedAt: number }>(x: T): T => ({
@@ -156,6 +157,37 @@ export default function App() {
     }
   };
 
+  const login = async (password: string): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        await syncNow();
+        return null;
+      }
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        const minutes = Math.max(1, Math.ceil((body.retryAfter ?? 60) / 60));
+        return `Trop d’essais. Réessaie dans ${minutes} minute${minutes > 1 ? 's' : ''}.`;
+      }
+      return body.error || 'Connexion impossible.';
+    } catch {
+      return 'Serveur injoignable. Vérifie ta connexion.';
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    } finally {
+      setShowLists(false);
+      syncNow(); // the server now answers 401, which shows the login screen
+    }
+  };
+
   const updateItem = (id: string, draft: ItemDraft) => {
     setItems((prev) => prev.map((i) => (i.id === id ? stamp({ ...i, ...draft }) : i)));
     setEditingItem(null);
@@ -216,6 +248,8 @@ export default function App() {
     acc[l.id] = items.filter((i) => i.listId === l.id).length;
     return acc;
   }, {});
+
+  if (syncStatus === 'locked') return <LoginScreen onSubmit={login} />;
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden bg-surface text-text">
@@ -439,6 +473,7 @@ export default function App() {
             onRename={renameList}
             onDelete={deleteList}
             syncStatus={syncStatus}
+            onLogout={authRequired ? logout : undefined}
             onExport={exportData}
             onImport={importData}
             onClose={() => setShowLists(false)}

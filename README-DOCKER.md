@@ -7,7 +7,8 @@ redémarrages, aux mises à jour et au vidage du navigateur.
 ## Installation
 
 ```bash
-cp .env.example .env        # optionnel : change PORT si 3000 est déjà pris
+cp .env.example .env
+nano .env                   # écris ton mot de passe après APP_PASSWORD=
 docker compose up -d --build
 ```
 
@@ -56,12 +57,27 @@ Dans l'app, **Mes listes → Exporter / Importer** crée ou relit un fichier `.j
 listes (utile pour une sauvegarde à part ou pour passer d'un serveur à un autre).
 L'import ajoute ce qui manque et ne supprime jamais rien.
 
+## Mot de passe
+
+- Il se définit dans `.env` (`APP_PASSWORD=...`). **Laissé vide, il n'y a pas de mot de
+  passe** : le serveur l'indique dans ses logs (`docker compose logs`).
+- Chaque appareil le tape **une seule fois** : il est ensuite reconnu pendant 90 jours
+  (et la durée se prolonge tant que tu utilises l'app).
+- **Changer le mot de passe** : modifie `.env`, puis `docker compose up -d`. Tous les
+  appareils (y compris un téléphone perdu) sont déconnectés et doivent retaper le nouveau.
+- **Se déconnecter** d'un appareil : « Mes listes » → « Se déconnecter de cet appareil ».
+- Après 5 essais faux, l'appareil est bloqué 15 minutes.
+- Ce que ça protège : les **listes enregistrées sur le serveur**. La page de l'app
+  elle-même (le code) reste publique, et les données déjà présentes dans le navigateur
+  d'un appareil restent sur cet appareil.
+
 ## Installation en PWA et sécurité
 
 - Pour « Ajouter à l'écran d'accueil », il faut du **HTTPS**. Avec Tailscale :
   `sudo tailscale serve --bg 3000` donne une adresse `https://….ts.net`.
-- **Il n'y a pas de mot de passe** : toute personne qui peut ouvrir l'app peut lire et
-  modifier tes listes. Garde-la derrière Tailscale (ne lance pas `tailscale funnel`).
-  Pour que seul Tailscale y accède, remplace dans `docker-compose.yml`
+- Le mot de passe est envoyé tel quel : sur du simple `http://` il circule en clair sur
+  ton réseau local. Utilise l'adresse HTTPS de Tailscale, et ne lance pas
+  `tailscale funnel` (accès depuis tout Internet) sauf si tu sais pourquoi.
+- Pour que seul Tailscale puisse atteindre l'app, remplace dans `docker-compose.yml`
   `"${PORT:-3000}:3000"` par `"127.0.0.1:${PORT:-3000}:3000"`.
 - **Autre port** : mets `PORT=8080` dans `.env`.

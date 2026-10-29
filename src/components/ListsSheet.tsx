@@ -14,6 +14,7 @@ const STATUS_TEXT: Record<SyncStatus, string> = {
   syncing: 'Synchronisation avec le serveur…',
   synced: 'Enregistré sur le serveur : tes listes sont partagées entre tes appareils.',
   offline: 'Serveur injoignable. Les modifications sont gardées ici et envoyées dès son retour.',
+  locked: 'Connexion requise.',
 };
 
 export function ListsSheet({
@@ -25,6 +26,7 @@ export function ListsSheet({
   onRename,
   onDelete,
   syncStatus,
+  onLogout,
   onExport,
   onImport,
   onClose,
@@ -37,6 +39,8 @@ export function ListsSheet({
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
   syncStatus: SyncStatus;
+  /** Only given when the server is protected by a password. */
+  onLogout?: () => void;
   onExport: () => void | Promise<void>;
   /** Resolves with a message to show; `ok: false` marks it as an error. */
   onImport: (file: File) => Promise<{ ok: boolean; message: string }>;
@@ -226,6 +230,14 @@ export function ListsSheet({
           >
             {STATUS_TEXT[syncStatus]}
           </p>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="self-start ml-0.5 text-xs font-body font-medium text-text-dim underline underline-offset-2 hover:text-text transition-colors"
+            >
+              Se déconnecter de cet appareil
+            </button>
+          )}
           <div className="flex gap-2">
             <button
               onClick={handleExport}

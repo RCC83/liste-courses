@@ -6,6 +6,9 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
+    environment:
+      # Mot de passe pour entrer dans l'app (défini dans le fichier .env).
+      APP_PASSWORD: ${APP_PASSWORD:-}
     volumes:
       # Les listes sont enregistrées ici : elles survivent aux mises à jour et aux redémarrages.
       - liste-courses-data:/data

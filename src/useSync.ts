@@ -17,8 +17,9 @@ import { mergeStates, repairState, sameState, sanitizeState, type SyncState } fr
  * syncing = a request is in progress
  * synced  = this device and the server have the same data
  * offline = the server can't be reached; changes are sent as soon as it can
+ * locked  = the server wants a password and this device hasn't entered it (yet)
  */
-export type SyncStatus = 'local' | 'syncing' | 'synced' | 'offline';
+export type SyncStatus = 'local' | 'syncing' | 'synced' | 'offline' | 'locked';
 
 const POLL_MS = 15_000;
 const DEBOUNCE_MS = 600;
@@ -26,6 +27,7 @@ const TIMEOUT_MS = 10_000;
 
 export function useSync(state: SyncState, apply: (s: SyncState) => void) {
   const [status, setStatus] = useState<SyncStatus>('syncing');
+  const [authRequired, setAuthRequired] = useState(false);
   const latest = useRef(state);
   latest.current = state;
   const inflight = useRef(false);
@@ -52,6 +54,11 @@ export function useSync(state: SyncState, apply: (s: SyncState) => void) {
         signal: controller.signal,
       });
       const isJson = (res.headers.get('content-type') ?? '').includes('application/json');
+      if (res.status === 401 && isJson) {
+        setAuthRequired(true);
+        setStatus('locked');
+        return;
+      }
       if (res.status === 404 || res.status === 405 || !isJson) {
         // Nothing answers /api/sync (static hosting): stay purely local.
         noServer.current = true;
@@ -60,7 +67,9 @@ export function useSync(state: SyncState, apply: (s: SyncState) => void) {
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const server = sanitizeState((await res.json()).state);
+      const body = await res.json();
+      setAuthRequired(body.authRequired === true);
+      const server = sanitizeState(body.state);
       const current = latest.current;
       // Merge with the current state (not the one that was sent) so edits made
       // during the request are not lost, then apply the usual repairs.
@@ -105,5 +114,5 @@ export function useSync(state: SyncState, apply: (s: SyncState) => void) {
     };
   }, [run]);
 
-  return status;
+  return { status, authRequired, syncNow: run };
 }
