@@ -5,7 +5,7 @@
 
 import { useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Check, ClipboardList, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, ClipboardList, Download, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { ShoppingList } from '../types';
 
 export function ListsSheet({
@@ -16,6 +16,8 @@ export function ListsSheet({
   onCreate,
   onRename,
   onDelete,
+  onExport,
+  onImport,
   onClose,
 }: {
   lists: ShoppingList[];
@@ -25,6 +27,9 @@ export function ListsSheet({
   onCreate: (name: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  onExport: () => void | Promise<void>;
+  /** Resolves with a message to show; `ok: false` marks it as an error. */
+  onImport: (file: File) => Promise<{ ok: boolean; message: string }>;
   onClose: () => void;
 }) {
   const [creating, setCreating] = useState(false);
@@ -32,6 +37,33 @@ export function ListsSheet({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const newInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [backupMsg, setBackupMsg] = useState<{ ok: boolean; message: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleExport = async () => {
+    setBackupMsg(null);
+    try {
+      await onExport();
+    } catch {
+      setBackupMsg({ ok: false, message: "L'export a échoué." });
+    }
+  };
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setBackupMsg(null);
+    try {
+      setBackupMsg(await onImport(file));
+    } catch {
+      setBackupMsg({ ok: false, message: "L'import a échoué." });
+    } finally {
+      setBusy(false);
+      // Lets the same file be picked again.
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const startCreate = () => {
     setCreating(true);
@@ -172,6 +204,45 @@ export function ListsSheet({
               <Plus className="w-4 h-4" />
               Nouvelle liste
             </button>
+          )}
+        </div>
+
+        <div className="px-4 pt-3 pb-4 border-t border-text/5 flex flex-col gap-2 flex-shrink-0">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim ml-0.5">
+            Sauvegarde
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleExport}
+              disabled={busy}
+              className="flex-1 h-10 rounded-xl bg-surface-bright border border-text/5 text-text-muted hover:text-text hover:border-primary/30 font-body font-medium text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-40"
+            >
+              <Download className="w-4 h-4" />
+              Exporter
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={busy}
+              className="flex-1 h-10 rounded-xl bg-surface-bright border border-text/5 text-text-muted hover:text-text hover:border-primary/30 font-body font-medium text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-40"
+            >
+              <Upload className="w-4 h-4" />
+              Importer
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => handleFile(e.target.files?.[0])}
+          />
+          {backupMsg && (
+            <p
+              role="status"
+              className={`text-xs font-body font-medium ml-0.5 ${backupMsg.ok ? 'text-primary' : 'text-error'}`}
+            >
+              {backupMsg.message}
+            </p>
           )}
         </div>
       </motion.div>

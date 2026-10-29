@@ -29,7 +29,7 @@ export const CATEGORY_EMOJI: Record<Category, string> = {
   'Autre': '📦',
 };
 
-/** Max length of a quantity string (input field, photo import, server sanitising). */
+/** Max length of a quantity string (input field and backup import). */
 export const QTY_MAX_LENGTH = 40;
 
 export const QTY_SUGGESTIONS = [

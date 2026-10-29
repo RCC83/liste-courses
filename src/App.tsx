@@ -5,7 +5,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Camera,
   ChevronDown,
   Plus,
   Sun,
@@ -16,11 +15,19 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { CATEGORIES, CATEGORY_EMOJI } from './constants';
 import { load, loadListsAndItems, save } from './storage';
-import type { ExtractedItem, Filter, Item, ShoppingList } from './types';
+import {
+  BACKUP_MAX_BYTES,
+  BackupError,
+  backupFilename,
+  buildBackup,
+  importSummary,
+  mergeBackup,
+  parseBackup,
+} from './backup';
+import type { Filter, Item, ShoppingList } from './types';
 import { ItemRow } from './components/ItemRow';
 import { ItemSheet, type ItemDraft } from './components/ItemSheet';
 import { ListsSheet } from './components/ListsSheet';
-import { PhotoImportSheet } from './components/PhotoImportSheet';
 
 const initial = loadListsAndItems();
 
@@ -33,7 +40,6 @@ export default function App() {
   );
   const [filter, setFilter] = useState<Filter>('tous');
   const [showAdd, setShowAdd] = useState(false);
-  const [showPhoto, setShowPhoto] = useState(false);
   const [showLists, setShowLists] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
 
@@ -70,19 +76,50 @@ export default function App() {
     setShowAdd(false);
   };
 
-  const addItemsFromPhoto = (extracted: ExtractedItem[]) => {
-    const now = Date.now();
-    setItems((prev) => [
-      ...extracted.map((it, i) => ({
-        ...it,
-        id: crypto.randomUUID(),
-        listId: activeListId,
-        checked: false,
-        createdAt: now + i,
-      })),
-      ...prev,
-    ]);
-    setShowPhoto(false);
+  const exportData = async () => {
+    const blob = new Blob([JSON.stringify(buildBackup(lists, items), null, 2)], {
+      type: 'application/json',
+    });
+    const file = new File([blob], backupFilename(), { type: 'application/json' });
+
+    // iOS home-screen apps can't download blobs reliably: use the share sheet
+    // ("Enregistrer dans Fichiers"). Everywhere else a normal download works.
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Liste de courses' });
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') throw err;
+      }
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+
+  const importData = async (file: File): Promise<{ ok: boolean; message: string }> => {
+    if (file.size > BACKUP_MAX_BYTES) {
+      return { ok: false, message: 'Ce fichier est trop volumineux.' };
+    }
+    try {
+      const incoming = parseBackup(await file.text());
+      const result = mergeBackup({ lists, items }, incoming);
+      setLists(result.lists);
+      setItems(result.items);
+      return { ok: true, message: importSummary(result) };
+    } catch (err) {
+      if (err instanceof BackupError) return { ok: false, message: err.message };
+      throw err;
+    }
   };
 
   const updateItem = (id: string, draft: ItemDraft) => {
@@ -312,14 +349,6 @@ export default function App() {
       <div className="fixed bottom-6 right-1/2 translate-x-1/2 z-40 max-w-md w-full flex flex-col items-end gap-2.5 pr-3 pb-[env(safe-area-inset-bottom)]">
         <motion.button
           whileTap={{ scale: 0.92 }}
-          onClick={() => setShowPhoto(true)}
-          className="w-10 h-10 rounded-xl bg-surface-container border border-text/10 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.2)] text-text hover:border-primary/40 transition-all"
-          aria-label="Ajouter par photo"
-        >
-          <Camera className="w-[18px] h-[18px]" />
-        </motion.button>
-        <motion.button
-          whileTap={{ scale: 0.92 }}
           onClick={() => setShowAdd(true)}
           className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:brightness-110 transition-all"
           aria-label="Ajouter un article"
@@ -347,13 +376,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Photo import sheet */}
-      <AnimatePresence>
-        {showPhoto && (
-          <PhotoImportSheet onImport={addItemsFromPhoto} onClose={() => setShowPhoto(false)} />
-        )}
-      </AnimatePresence>
-
       {/* Lists sheet */}
       <AnimatePresence>
         {showLists && (
@@ -365,6 +387,8 @@ export default function App() {
             onCreate={createList}
             onRename={renameList}
             onDelete={deleteList}
+            onExport={exportData}
+            onImport={importData}
             onClose={() => setShowLists(false)}
           />
         )}

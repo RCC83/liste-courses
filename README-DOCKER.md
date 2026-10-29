@@ -1,12 +1,12 @@
 # Liste de courses — version Docker (homelab)
 
-Même app que sur Vercel, dans un conteneur : un petit serveur Node sert l'interface
-et la route `/api/extract-items` (import par photo via Gemini).
+Même app que sur Vercel, dans un conteneur : un petit serveur Node sert l'interface.
+Le serveur ne stocke rien et n'a besoin d'aucune clé ni d'aucun service externe.
 
 ## Installation
 
 ```bash
-cp .env.example .env        # puis renseigne GEMINI_API_KEY (optionnel)
+cp .env.example .env        # optionnel : change PORT si 3000 est déjà pris
 docker compose up -d --build
 ```
 
@@ -16,22 +16,30 @@ L'app est disponible sur `http://<ip-du-homelab>:3000`.
 
 ```bash
 docker compose logs -f          # voir les logs
-docker compose up -d --build    # mettre à jour après un changement du code
+git pull && docker compose up -d --build   # mettre à jour
 docker compose down             # arrêter
 curl localhost:3000/healthz     # test de santé : {"ok":true}
 ```
 
+## Sauvegarder et restaurer les listes
+
+Les listes sont stockées **dans le navigateur** de chaque appareil (localStorage),
+pas sur le serveur. Pour les sauvegarder ou les copier d'un téléphone à l'autre :
+
+- **Exporter** : ouvre « Mes listes » (en haut de l'app), puis **Exporter**. Un fichier
+  `liste-courses-AAAA-MM-JJ.json` est enregistré (sur iPhone : feuille de partage →
+  « Enregistrer dans Fichiers »).
+- **Importer** : « Mes listes » → **Importer**, puis choisis le fichier.
+  L'import **ajoute** ce qui manque et ne modifie ni ne supprime jamais rien : tu peux
+  donc importer le même fichier plusieurs fois sans créer de doublons.
+
+Pense à exporter de temps en temps : vider les données du navigateur efface les listes.
+
 ## À savoir
 
-- **Les listes sont stockées dans le navigateur** (localStorage), pas sur le serveur.
-  Chaque téléphone ou ordinateur a donc ses propres listes, et rien n'est à sauvegarder
-  côté Docker. Un conteneur sans volume est normal ici.
-- **« Ajouter à l'écran d'accueil » / installation en PWA** : les navigateurs n'activent
-  le service worker qu'en **HTTPS** (ou sur `localhost`). En `http://192.168.x.x:3000`
-  l'app s'affiche et fonctionne, mais sans installation ni mode hors-ligne. Pour avoir
-  le HTTPS, place l'app derrière un reverse proxy (Caddy, Traefik, Nginx Proxy Manager)
-  ou utilise Tailscale / Cloudflare Tunnel.
-- **Clé Gemini** : elle ne sort jamais du conteneur. Si tu exposes l'app sur Internet,
-  protège-la (reverse proxy avec authentification), sinon n'importe qui pourra utiliser
-  ta clé via `/api/extract-items`.
+- **Installation en PWA** (« Ajouter à l'écran d'accueil ») : les navigateurs n'activent
+  le service worker qu'en **HTTPS** (ou sur `localhost`). Avec Tailscale :
+  `sudo tailscale serve --bg 3000` donne une adresse `https://….ts.net`.
+- Les données sont liées à l'adresse exacte de l'app : si l'adresse change, l'app
+  s'affiche vide (les listes restent sous l'ancienne adresse). Utilise Exporter / Importer.
 - **Autre port** : mets `PORT=8080` dans `.env`.

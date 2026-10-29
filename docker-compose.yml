@@ -6,6 +6,3 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
-    environment:
-      # Optionnel : sans clé, l'app marche, seul « Ajouter par photo » est désactivé.
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}

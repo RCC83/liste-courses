@@ -31,9 +31,3 @@ export interface Item {
   checked: boolean;
   createdAt: number;
 }
-
-export interface ExtractedItem {
-  name: string;
-  qty: string;
-  category: Category;
-}

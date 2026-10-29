@@ -2,14 +2,12 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * Self-hosted server for the Docker image. Serves the built app (dist/) and
- * the same POST /api/extract-items route as the Vercel function, so the
- * Gemini API key stays on the server.
+ * Self-hosted server for the Docker image. Serves the built app (dist/).
+ * Nothing is stored server-side: lists live in each browser's localStorage.
  */
 
 import express from 'express';
 import path from 'node:path';
-import { extractItemsFromImage } from '../src/server/geminiExtract';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const DIST_DIR = process.env.DIST_DIR ?? path.resolve(process.cwd(), 'dist');
@@ -17,37 +15,8 @@ const DIST_DIR = process.env.DIST_DIR ?? path.resolve(process.cwd(), 'dist');
 const app = express();
 app.disable('x-powered-by');
 
-// A phone photo encoded in base64 is easily several MB.
-app.use('/api', express.json({ limit: '25mb' }));
-
 app.get('/healthz', (_req, res) => {
   res.json({ ok: true });
-});
-
-app.post('/api/extract-items', async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: "GEMINI_API_KEY n'est pas configurée sur le serveur" });
-    return;
-  }
-
-  const { image, mimeType } = req.body ?? {};
-  if (typeof image !== 'string' || typeof mimeType !== 'string') {
-    res.status(400).json({ error: 'Champs "image" et "mimeType" requis' });
-    return;
-  }
-
-  try {
-    const items = await extractItemsFromImage(apiKey, image, mimeType);
-    res.json({ items });
-  } catch (err) {
-    console.error('extract-items failed:', err);
-    res.status(500).json({ error: "Échec de l'analyse de l'image" });
-  }
-});
-
-app.all('/api/*', (_req, res) => {
-  res.status(405).json({ error: 'Méthode non autorisée' });
 });
 
 // The service worker must never be served from a stale cache, otherwise
