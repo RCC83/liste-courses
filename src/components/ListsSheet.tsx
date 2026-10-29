@@ -28,6 +28,7 @@ export function ListsSheet({
   syncStatus,
   onLogout,
   onExport,
+  onExportBackup,
   onImport,
   onClose,
 }: {
@@ -41,7 +42,10 @@ export function ListsSheet({
   syncStatus: SyncStatus;
   /** Only given when the server is protected by a password. */
   onLogout?: () => void;
+  /** Exports the open list as a PDF. */
   onExport: () => void | Promise<void>;
+  /** Downloads every list as a JSON file (what "Importer" reads back). */
+  onExportBackup: () => void | Promise<void>;
   /** Resolves with a message to show; `ok: false` marks it as an error. */
   onImport: (file: File) => Promise<{ ok: boolean; message: string }>;
   onClose: () => void;
@@ -55,12 +59,15 @@ export function ListsSheet({
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const handleExport = async () => {
+  const runExport = async (action: () => void | Promise<void>) => {
     setBackupMsg(null);
+    setBusy(true);
     try {
-      await onExport();
+      await action();
     } catch {
       setBackupMsg({ ok: false, message: "L'export a échoué." });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -240,12 +247,12 @@ export function ListsSheet({
           )}
           <div className="flex gap-2">
             <button
-              onClick={handleExport}
+              onClick={() => runExport(onExport)}
               disabled={busy}
               className="flex-1 h-10 rounded-xl bg-surface-bright border border-text/5 text-text-muted hover:text-text hover:border-primary/30 font-body font-medium text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-40"
             >
               <Download className="w-4 h-4" />
-              Exporter
+              Exporter en PDF
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -256,6 +263,13 @@ export function ListsSheet({
               Importer
             </button>
           </div>
+          <button
+            onClick={() => runExport(onExportBackup)}
+            disabled={busy}
+            className="self-start ml-0.5 text-xs font-body font-medium text-text-dim underline underline-offset-2 hover:text-text transition-colors disabled:opacity-40"
+          >
+            Sauvegarde complète de toutes les listes (.json)
+          </button>
           <input
             ref={fileInputRef}
             type="file"

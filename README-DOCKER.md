@@ -53,9 +53,12 @@ Pour restaurer : `docker compose down`, puis
 `docker run --rm -v liste-courses-data:/data -v "$PWD":/backup alpine tar xzf /backup/liste-courses-data.tgz -C /data`,
 puis `docker compose up -d`.
 
-Dans l'app, **Mes listes → Exporter / Importer** crée ou relit un fichier `.json` de tes
-listes (utile pour une sauvegarde à part ou pour passer d'un serveur à un autre).
-L'import ajoute ce qui manque et ne supprime jamais rien.
+Dans l'app, **Mes listes → Exporter en PDF** crée un PDF imprimable de la liste ouverte
+(articles par catégorie, avec une case à cocher).
+
+Pour une sauvegarde de **toutes** les listes (ou pour passer d'un serveur à un autre) :
+**Sauvegarde complète (.json)**, que **Importer** relit. L'import ajoute ce qui manque et
+ne supprime jamais rien.
 
 ## Mot de passe
 

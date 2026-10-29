@@ -32,6 +32,7 @@ import type { Filter, Item, ShoppingList } from './types';
 import { ItemRow } from './components/ItemRow';
 import { ItemSheet, type ItemDraft } from './components/ItemSheet';
 import { ListsSheet } from './components/ListsSheet';
+import { buildListPdf, pdfFilename } from './pdf';
 import { LoginScreen } from './components/LoginScreen';
 
 const initial = loadListsAndItems();
@@ -108,11 +109,9 @@ export default function App() {
     setShowAdd(false);
   };
 
-  const exportData = async () => {
-    const blob = new Blob([JSON.stringify(buildBackup(lists, items), null, 2)], {
-      type: 'application/json',
-    });
-    const file = new File([blob], backupFilename(), { type: 'application/json' });
+  /** Gives a generated file to the user: share sheet on iOS, normal download elsewhere. */
+  const deliverFile = async (blob: Blob, name: string) => {
+    const file = new File([blob], name, { type: blob.type });
 
     // iOS home-screen apps can't download blobs reliably: use the share sheet
     // ("Enregistrer dans Fichiers"). Everywhere else a normal download works.
@@ -131,11 +130,27 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = file.name;
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+
+  /** "Exporter": the open list as a PDF. */
+  const exportPdf = async () => {
+    const list = lists.find((l) => l.id === activeListId) ?? lists[0];
+    if (!list) return;
+    const blob = await buildListPdf(list, items.filter((i) => i.listId === list.id));
+    await deliverFile(blob, pdfFilename(list.name));
+  };
+
+  /** Full backup of every list (JSON), the file that "Importer" reads back. */
+  const exportBackup = async () => {
+    const blob = new Blob([JSON.stringify(buildBackup(lists, items), null, 2)], {
+      type: 'application/json',
+    });
+    await deliverFile(blob, backupFilename());
   };
 
   const importData = async (file: File): Promise<{ ok: boolean; message: string }> => {
@@ -474,7 +489,8 @@ export default function App() {
             onDelete={deleteList}
             syncStatus={syncStatus}
             onLogout={authRequired ? logout : undefined}
-            onExport={exportData}
+            onExport={exportPdf}
+            onExportBackup={exportBackup}
             onImport={importData}
             onClose={() => setShowLists(false)}
           />
