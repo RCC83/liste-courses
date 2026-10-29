@@ -26,8 +26,10 @@ const DEFAULT_LIST_ID = 'default';
 export function loadListsAndItems(): { lists: ShoppingList[]; items: Item[] } {
   const existingLists = load<ShoppingList[] | null>('sl_lists', null);
   if (existingLists && existingLists.length > 0) {
-    const items = load<Item[]>('sl_items', []);
-    return { lists: existingLists, items };
+    // Data saved before synchronisation existed has no `updatedAt`: use the creation date.
+    const lists = existingLists.map((l) => ({ ...l, updatedAt: l.updatedAt ?? l.createdAt }));
+    const items = load<Item[]>('sl_items', []).map((i) => ({ ...i, updatedAt: i.updatedAt ?? i.createdAt }));
+    return { lists, items };
   }
 
   // Migration from the old single-list format, or first run.
@@ -36,16 +38,23 @@ export function loadListsAndItems(): { lists: ShoppingList[]; items: Item[] } {
     id: DEFAULT_LIST_ID,
     name: 'Ma liste',
     createdAt: Date.now(),
+    // 0 = "never edited": this placeholder can never override a real list of the
+    // same id coming from the server (e.g. a list the user already renamed).
+    updatedAt: 0,
   };
-  const items: Item[] = legacyItems.map((raw) => ({
-    id: String(raw.id),
-    listId: DEFAULT_LIST_ID,
-    name: String(raw.name ?? ''),
-    qty: String(raw.qty ?? ''),
-    category: (raw.category as Item['category']) ?? 'Autre',
-    checked: Boolean(raw.checked),
-    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
-  }));
+  const items: Item[] = legacyItems.map((raw) => {
+    const createdAt = typeof raw.createdAt === 'number' ? raw.createdAt : Date.now();
+    return {
+      id: String(raw.id),
+      listId: DEFAULT_LIST_ID,
+      name: String(raw.name ?? ''),
+      qty: String(raw.qty ?? ''),
+      category: (raw.category as Item['category']) ?? 'Autre',
+      checked: Boolean(raw.checked),
+      createdAt,
+      updatedAt: createdAt,
+    };
+  });
 
   save('sl_lists', [defaultList]);
   save('sl_items', items);

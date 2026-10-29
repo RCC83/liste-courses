@@ -6,3 +6,9 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
+    volumes:
+      # Les listes sont enregistrées ici : elles survivent aux mises à jour et aux redémarrages.
+      - liste-courses-data:/data
+
+volumes:
+  liste-courses-data:

@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ChevronDown,
+  Cloud,
+  CloudOff,
   Plus,
   Sun,
   Moon,
@@ -15,6 +17,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { CATEGORIES, CATEGORY_EMOJI } from './constants';
 import { load, loadListsAndItems, save } from './storage';
+import { useSync } from './useSync';
+import type { SyncState } from './sync';
 import {
   BACKUP_MAX_BYTES,
   BackupError,
@@ -31,6 +35,12 @@ import { ListsSheet } from './components/ListsSheet';
 
 const initial = loadListsAndItems();
 
+const SYNC_LABEL: Record<string, string> = {
+  syncing: 'Synchronisation en cours…',
+  synced: 'Enregistré sur le serveur',
+  offline: 'Serveur injoignable : les modifications seront envoyées dès son retour',
+};
+
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => load('sl_theme', 'dark'));
   const [lists, setLists] = useState<ShoppingList[]>(initial.lists);
@@ -38,6 +48,8 @@ export default function App() {
   const [activeListId, setActiveListId] = useState<string>(() =>
     load('sl_active_list', initial.lists[0]?.id ?? 'default')
   );
+  // Ids of lists/items deleted here, so that other devices delete them too.
+  const [deleted, setDeleted] = useState<Record<string, number>>(() => load('sl_deleted', {}));
   const [filter, setFilter] = useState<Filter>('tous');
   const [showAdd, setShowAdd] = useState(false);
   const [showLists, setShowLists] = useState(false);
@@ -51,6 +63,7 @@ export default function App() {
 
   useEffect(() => save('sl_lists', lists), [lists]);
   useEffect(() => save('sl_items', items), [items]);
+  useEffect(() => save('sl_deleted', deleted), [deleted]);
   useEffect(() => save('sl_active_list', activeListId), [activeListId]);
 
   // Guard against a stale/deleted active list id.
@@ -62,6 +75,23 @@ export default function App() {
 
   const activeList = lists.find((l) => l.id === activeListId) ?? lists[0];
 
+  const applySync = useCallback((s: SyncState) => {
+    setLists(s.lists);
+    setItems(s.items);
+    setDeleted(s.deleted);
+  }, []);
+  const syncStatus = useSync({ lists, items, deleted }, applySync);
+
+  /** Every change gets a strictly newer timestamp, so the latest edit wins everywhere. */
+  const stamp = <T extends { updatedAt: number }>(x: T): T => ({
+    ...x,
+    updatedAt: Math.max(Date.now(), x.updatedAt + 1),
+  });
+  const markDeleted = (ids: string[]) => {
+    const now = Date.now();
+    setDeleted((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, now])) }));
+  };
+
   const addItem = (draft: ItemDraft) => {
     setItems((prev) => [
       {
@@ -70,6 +100,7 @@ export default function App() {
         listId: activeListId,
         checked: false,
         createdAt: Date.now(),
+        updatedAt: Date.now(),
       },
       ...prev,
     ]);
@@ -115,6 +146,9 @@ export default function App() {
       const result = mergeBackup({ lists, items }, incoming);
       setLists(result.lists);
       setItems(result.items);
+      // Imported items count as new changes: forget older deletions of the same ids.
+      const added = new Set(result.addedIds);
+      setDeleted((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !added.has(id))));
       return { ok: true, message: importSummary(result) };
     } catch (err) {
       if (err instanceof BackupError) return { ok: false, message: err.message };
@@ -123,38 +157,41 @@ export default function App() {
   };
 
   const updateItem = (id: string, draft: ItemDraft) => {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...draft } : i)));
+    setItems((prev) => prev.map((i) => (i.id === id ? stamp({ ...i, ...draft }) : i)));
     setEditingItem(null);
   };
 
   const toggleItem = (id: string) =>
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
+      prev.map((i) => (i.id === id ? stamp({ ...i, checked: !i.checked }) : i))
     );
 
   const deleteItem = (id: string) => {
+    markDeleted([id]);
     setItems((prev) => prev.filter((i) => i.id !== id));
     setEditingItem((cur) => (cur?.id === id ? null : cur));
   };
 
-  const clearChecked = () =>
+  const clearChecked = () => {
+    markDeleted(items.filter((i) => i.checked && i.listId === activeListId).map((i) => i.id));
     setItems((prev) => prev.filter((i) => !(i.checked && i.listId === activeListId)));
+  };
 
   // Lists management
   const createList = (name: string) => {
-    const list: ShoppingList = { id: crypto.randomUUID(), name, createdAt: Date.now() };
+    const now = Date.now();
+    const list: ShoppingList = { id: crypto.randomUUID(), name, createdAt: now, updatedAt: now };
     setLists((prev) => [...prev, list]);
     setActiveListId(list.id);
   };
 
   const renameList = (id: string, name: string) =>
-    setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name } : l)));
+    setLists((prev) => prev.map((l) => (l.id === id ? stamp({ ...l, name }) : l)));
 
   const deleteList = (id: string) => {
-    setLists((prev) => {
-      const next = prev.filter((l) => l.id !== id);
-      return next.length > 0 ? next : prev; // always keep at least one list
-    });
+    if (lists.length <= 1) return; // always keep at least one list
+    markDeleted([id, ...items.filter((i) => i.listId === id).map((i) => i.id)]);
+    setLists((prev) => prev.filter((l) => l.id !== id));
     setItems((prev) => prev.filter((i) => i.listId !== id));
   };
 
@@ -196,12 +233,26 @@ export default function App() {
               </span>
             </div>
           </div>
+          <div className="flex items-center gap-1">
+          {syncStatus !== 'local' && (
+            <span
+              role="img"
+              aria-label={SYNC_LABEL[syncStatus]}
+              title={SYNC_LABEL[syncStatus]}
+              className={`p-2 ${syncStatus === 'offline' ? 'text-error' : 'text-text-dim'} ${
+                syncStatus === 'syncing' ? 'animate-pulse' : ''
+              }`}
+            >
+              {syncStatus === 'offline' ? <CloudOff className="w-[18px] h-[18px]" /> : <Cloud className="w-[18px] h-[18px]" />}
+            </span>
+          )}
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="p-2 rounded-lg text-text-muted hover:text-primary transition-all active:scale-90"
           >
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
+          </div>
         </div>
 
         {/* List switcher */}
@@ -387,6 +438,7 @@ export default function App() {
             onCreate={createList}
             onRename={renameList}
             onDelete={deleteList}
+            syncStatus={syncStatus}
             onExport={exportData}
             onImport={importData}
             onClose={() => setShowLists(false)}

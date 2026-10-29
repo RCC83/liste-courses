@@ -20,6 +20,8 @@ export interface ShoppingList {
   id: string;
   name: string;
   createdAt: number;
+  /** Last modification (ms). Used to merge changes coming from several devices. */
+  updatedAt: number;
 }
 
 export interface Item {
@@ -30,4 +32,6 @@ export interface Item {
   category: Category;
   checked: boolean;
   createdAt: number;
+  /** Last modification (ms). Used to merge changes coming from several devices. */
+  updatedAt: number;
 }

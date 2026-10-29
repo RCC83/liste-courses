@@ -7,6 +7,14 @@ import { useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, ClipboardList, Download, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { ShoppingList } from '../types';
+import type { SyncStatus } from '../useSync';
+
+const STATUS_TEXT: Record<SyncStatus, string> = {
+  local: 'Données enregistrées sur cet appareil uniquement.',
+  syncing: 'Synchronisation avec le serveur…',
+  synced: 'Enregistré sur le serveur : tes listes sont partagées entre tes appareils.',
+  offline: 'Serveur injoignable. Les modifications sont gardées ici et envoyées dès son retour.',
+};
 
 export function ListsSheet({
   lists,
@@ -16,6 +24,7 @@ export function ListsSheet({
   onCreate,
   onRename,
   onDelete,
+  syncStatus,
   onExport,
   onImport,
   onClose,
@@ -27,6 +36,7 @@ export function ListsSheet({
   onCreate: (name: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  syncStatus: SyncStatus;
   onExport: () => void | Promise<void>;
   /** Resolves with a message to show; `ok: false` marks it as an error. */
   onImport: (file: File) => Promise<{ ok: boolean; message: string }>;
@@ -210,6 +220,11 @@ export function ListsSheet({
         <div className="px-4 pt-3 pb-4 border-t border-text/5 flex flex-col gap-2 flex-shrink-0">
           <p className="text-[9px] font-bold uppercase tracking-widest text-text-dim ml-0.5">
             Sauvegarde
+          </p>
+          <p
+            className={`text-xs font-body font-medium ml-0.5 ${syncStatus === 'offline' ? 'text-error' : 'text-text-muted'}`}
+          >
+            {STATUS_TEXT[syncStatus]}
           </p>
           <div className="flex gap-2">
             <button

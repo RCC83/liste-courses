@@ -10,16 +10,12 @@
  * app brings everything back; importing on a second phone adds to what is there.
  */
 
-import { CATEGORIES, QTY_MAX_LENGTH } from './constants';
-import type { Category, Item, ShoppingList } from './types';
+import { MAX_ITEMS, MAX_LISTS, sanitizeItems, sanitizeLists } from './sync';
+import type { Item, ShoppingList } from './types';
 
 export const BACKUP_APP = 'liste-courses';
 export const BACKUP_VERSION = 1;
 export const BACKUP_MAX_BYTES = 5 * 1024 * 1024;
-
-const MAX_LISTS = 200;
-const MAX_ITEMS = 20000;
-const MAX_NAME_LENGTH = 200;
 
 export interface Backup {
   app: typeof BACKUP_APP;
@@ -50,9 +46,6 @@ export function backupFilename(now = new Date()): string {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
-const cleanText = (v: unknown, max: number): string =>
-  typeof v === 'string' ? v.trim().slice(0, max) : '';
-
 /**
  * Parses and validates a backup file. Anything malformed is dropped rather
  * than trusted: unknown categories become "Autre", bad numbers get a default.
@@ -75,39 +68,8 @@ export function parseBackup(text: string): { lists: ShoppingList[]; items: Item[
     throw new BackupError('Cette sauvegarde est trop volumineuse.');
   }
 
-  const now = Date.now();
-  const timestamp = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : now);
-
-  const lists: ShoppingList[] = [];
-  const listIds = new Set<string>();
-  for (const raw of data.lists) {
-    if (!isObject(raw)) continue;
-    const id = cleanText(raw.id, 100);
-    const name = cleanText(raw.name, MAX_NAME_LENGTH);
-    if (!id || !name || listIds.has(id)) continue;
-    listIds.add(id);
-    lists.push({ id, name, createdAt: timestamp(raw.createdAt) });
-  }
-
-  const items: Item[] = [];
-  const itemIds = new Set<string>();
-  for (const raw of data.items) {
-    if (!isObject(raw)) continue;
-    const id = cleanText(raw.id, 100);
-    const name = cleanText(raw.name, MAX_NAME_LENGTH);
-    if (!id || !name || itemIds.has(id)) continue;
-    itemIds.add(id);
-    items.push({
-      id,
-      listId: cleanText(raw.listId, 100),
-      name,
-      qty: cleanText(raw.qty, QTY_MAX_LENGTH),
-      category: CATEGORIES.includes(raw.category as Category) ? (raw.category as Category) : 'Autre',
-      checked: raw.checked === true,
-      createdAt: timestamp(raw.createdAt),
-    });
-  }
-
+  const lists = sanitizeLists(data.lists);
+  const items = sanitizeItems(data.items);
   if (lists.length === 0 && items.length === 0) {
     throw new BackupError('Cette sauvegarde est vide.');
   }
@@ -119,15 +81,19 @@ export interface MergeResult {
   items: Item[];
   addedLists: number;
   addedItems: number;
+  /** Ids of everything that was added (so a stale deletion of them can be forgotten). */
+  addedIds: string[];
 }
 
 /** Adds what is missing; never modifies or removes anything that already exists. */
 export function mergeBackup(
   current: { lists: ShoppingList[]; items: Item[] },
-  incoming: { lists: ShoppingList[]; items: Item[] }
+  incoming: { lists: ShoppingList[]; items: Item[] },
+  now = Date.now()
 ): MergeResult {
   const knownLists = new Set(current.lists.map((l) => l.id));
-  const newLists = incoming.lists.filter((l) => !knownLists.has(l.id));
+  // What gets added is stamped "now", so it is treated as a fresh change when synchronised.
+  const newLists = incoming.lists.filter((l) => !knownLists.has(l.id)).map((l) => ({ ...l, updatedAt: now }));
   const lists = [...current.lists, ...newLists];
 
   const knownItems = new Set(current.items.map((i) => i.id));
@@ -136,7 +102,7 @@ export function mergeBackup(
   const fallbackListId = lists[0]?.id;
   const newItems = incoming.items
     .filter((i) => !knownItems.has(i.id))
-    .map((i) => (listIds.has(i.listId) ? i : { ...i, listId: fallbackListId }))
+    .map((i) => ({ ...i, updatedAt: now, listId: listIds.has(i.listId) ? i.listId : fallbackListId }))
     .filter((i): i is Item => typeof i.listId === 'string' && i.listId !== '');
 
   return {
@@ -144,6 +110,7 @@ export function mergeBackup(
     items: [...newItems, ...current.items],
     addedLists: newLists.length,
     addedItems: newItems.length,
+    addedIds: [...newLists.map((l) => l.id), ...newItems.map((i) => i.id)],
   };
 }
 

@@ -16,8 +16,12 @@ RUN npm run build \
 FROM node:22-alpine
 ENV NODE_ENV=production \
     PORT=3000 \
-    DIST_DIR=/app/dist
+    DIST_DIR=/app/dist \
+    DATA_DIR=/data
 WORKDIR /app
+
+# Dossier des données (monté en volume), accessible à l'utilisateur non-root.
+RUN mkdir -p /data && chown node:node /data
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist-server/index.cjs ./server.cjs
